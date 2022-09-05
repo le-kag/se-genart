@@ -1,27 +1,62 @@
-pragma solidity >=0.8.0 <0.9.0;
-//SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
+pragma solidity ^0.8.0;
 
-import "hardhat/console.sol";
-// import "@openzeppelin/contracts/access/Ownable.sol"; 
-// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/access/Ownable.sol
+import "@thirdweb-dev/contracts/base/ERC721Drop.sol";
 
-contract YourContract {
+contract MyGenerativeArt is ERC721Drop {
+    // Store the script that generates the art from a hash
+	  string public script;
 
-  event SetPurpose(address sender, string purpose);
+    function setScript(string calldata _script) onlyOwner public {
+        script = _script;
+    }
 
-  string public purpose = "Building Unstoppable Apps!!!";
+    // mapping from tokenId to associated hash value
+    mapping(uint256 => bytes32) public tokenToHash;
 
-  constructor() payable {
-    // what should we do on deploy?
-  }
+    // mapping of hash to tokenId
+    mapping(bytes32 => uint256) public hashToToken;
 
-  function setPurpose(string memory newPurpose) public {
-      purpose = newPurpose;
-      console.log(msg.sender,"set purpose to",purpose);
-      emit SetPurpose(msg.sender, purpose);
-  }
+    // Generative NFT logic
+    function _mintGenerative(address _to, uint256 _startTokenId, uint256 _qty) internal virtual {
+      for(uint256 i = 0; i < _qty; i += 1) {
+          uint256 _id = _startTokenId + i;
+	  			// generate hash
+          bytes32 mintHash = keccak256(abi.encodePacked(_id, blockhash(block.number - 1), _to));
+	  			// save hash in mappings
+          tokenToHash[_id] = mintHash;
+          hashToToken[mintHash] = _id;
+      }
+    }
 
-  // to support receiving ETH by default
-  receive() external payable {}
-  fallback() external payable {}
+    function transferTokensOnClaim(address _to, uint256 _quantityBeingClaimed)
+      internal
+      virtual
+      override
+      returns (uint256 startTokenId)
+    {
+        startTokenId = _currentIndex;
+	      // Call our mintGenerative function here!
+        _mintGenerative(_to, startTokenId, _quantityBeingClaimed);
+        _safeMint(_to, _quantityBeingClaimed);
+    }
+
+    constructor(
+        string memory _name,
+        string memory _symbol,
+        address _royaltyRecipient,
+        uint128 _royaltyBps,
+        address _primarySaleRecipient,
+				string memory _script
+    )
+      ERC721Drop(
+        _name,
+        _symbol,
+        _royaltyRecipient,
+        _royaltyBps,
+        _primarySaleRecipient
+      )
+    {
+				script = _script;
+		}
 }
